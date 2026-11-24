@@ -411,6 +411,29 @@ function movementRows(){
   }).join('');
 }
 function renderMovements(){let accountOptions=state.accounts.map(a=>`<option value="${esc(a.id)}" ${movementQuery.account===a.id?'selected':''}>${esc(a.name)}</option>`).join('');return`${pageHeader('Movimientos','Registra y consulta ingresos, egresos y transferencias.',addBtn('Registrar movimiento','new-movement'))}<div class="card mb-4 p-4"><div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3"><div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"></i><input class="field pl-9 text-sm" placeholder="Buscar detalle o cuenta" id="movementSearch" value="${esc(movementQuery.q)}"></div><select class="field text-sm" id="movementAccount"><option value="">Todas las cuentas</option>${accountOptions}</select><select class="field text-sm" id="movementType"><option value="">Todos los tipos</option>${['Ingreso','Egreso','Transferencia'].map(x=>`<option ${movementQuery.type===x?'selected':''}>${x}</option>`).join('')}</select><input class="field text-sm" type="date" id="movementFrom" aria-label="Desde" value="${esc(movementQuery.from)}"><input class="field text-sm" type="date" id="movementTo" aria-label="Hasta" value="${esc(movementQuery.to)}"></div></div><section class="card overflow-hidden">${state.accounts.length?tableShell(['Fecha','Descripción','Cuenta / destino','Tipo','Monto',''],movementRows()):empty('Primero crea una cuenta','Los movimientos se asocian a una cuenta. Crea una para empezar.',`<button class="soft" data-action="new-account">Crear cuenta</button>`)}${state.accounts.length&&state.movements.length===0?empty('¡Aún no hay aventuras de dinero! 🦸','Registra tu primer ingreso, egreso o transferencia.') : ''}</section>`}
+function movementAccountCards(){
+  const cards=[{id:'',name:'Todas las cuentas',amount:allBalance(),count:state.movements.length},...state.accounts.map(item=>({
+    id:item.id,name:item.name,amount:balance(item.id),
+    count:state.movements.filter(movement=>movement.accountId===item.id||(movement.type==='Transferencia'&&movement.toAccountId===item.id)).length
+  }))];
+  return cards.map(item=>{
+    const selected=movementQuery.account===item.id;
+    return `<button type="button" class="min-w-0 rounded-xl border p-4 text-left transition ${selected?'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100':'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'}" data-movement-account="${esc(item.id)}" aria-pressed="${selected}"><span class="block truncate text-sm font-semibold text-slate-800">${esc(item.name)}</span><span class="mt-2 block truncate text-base font-bold ${item.amount<0?'text-red-600':'text-emerald-700'}">${money(item.amount)}</span><span class="mt-1 block text-xs text-slate-500">${item.count} ${item.count===1?'movimiento':'movimientos'}</span></button>`;
+  }).join('');
+}
+renderMovements=function(){
+  const accountCards=movementAccountCards(),rows=movementRows();
+  return `${pageHeader('Movimientos','Registra y consulta ingresos, egresos y transferencias.',addBtn('Registrar movimiento','new-movement'))}
+    <section class="mb-4"><div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-slate-700">Cuentas</h3><span class="text-xs text-slate-500">${movementQuery.account?esc(account(movementQuery.account)?.name||'Cuenta seleccionada'):'Historial completo'}</span></div><div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">${accountCards}</div></section>
+    <div class="card mb-4 p-4"><div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"><div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i><input class="field pl-9 text-sm" placeholder="Buscar detalle o cuenta" id="movementSearch" value="${esc(movementQuery.q)}"></div><select class="field text-sm" id="movementType"><option value="">Todos los tipos</option>${['Ingreso','Egreso','Transferencia'].map(x=>`<option ${movementQuery.type===x?'selected':''}>${x}</option>`).join('')}</select><input class="field text-sm" type="date" id="movementFrom" aria-label="Desde" value="${esc(movementQuery.from)}"><input class="field text-sm" type="date" id="movementTo" aria-label="Hasta" value="${esc(movementQuery.to)}"></div></div>
+    <section class="card overflow-hidden">${state.accounts.length?tableShell(['Fecha','Descripción','Cuenta / destino','Tipo','Monto',''],rows):empty('Primero crea una cuenta','Los movimientos se asocian a una cuenta. Crea una para empezar.',`<button class="soft" data-action="new-account">Crear cuenta</button>`)}${state.accounts.length&&state.movements.length===0?empty('¡Aún no hay aventuras de dinero! 🦸','Registra tu primer ingreso, egreso o transferencia.') : ''}</section>`;
+};
+document.addEventListener('click',event=>{
+  const card=event.target.closest('[data-movement-account]');
+  if(!card)return;
+  movementQuery.account=card.dataset.movementAccount;
+  render();
+});
 function auditHolderId(movement){if(movement.holderId&&holder(movement.holderId))return movement.holderId;const ids=accountHolderIds(account(movement.accountId));return ids.length===1?ids[0]:''}
 function movementAuditData(){const query=norm(auditQuery.q);return state.movements.filter(movement=>{const owner=auditHolderId(movement),person=holder(owner)?.name||'',accountName=account(movement.accountId)?.name||'',amount=Number(movement.amount)||0,searchText=norm(`${movement.description||''} ${movement.category||''} ${accountName} ${person} ${amount} ${amount.toFixed(2)} ${money(amount)}`);return(!auditQuery.holder||(auditQuery.holder==='__none'?!owner:owner===auditQuery.holder))&&(!query||searchText.includes(query))}).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(Number(b.createdAt)||0)-(Number(a.createdAt)||0))}
 function movementAuditRows(){
